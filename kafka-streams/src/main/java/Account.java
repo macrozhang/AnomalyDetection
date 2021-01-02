@@ -1,11 +1,14 @@
 import com.google.gson.JsonObject;
 
+import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 
 public class Account {
 
     private final String giroNumber;
     private double balance;
+    private double balanceInEur;
     private final String currency;
     private long valid_from;
     private long valid_to;
@@ -13,10 +16,11 @@ public class Account {
     private double averageOfExpenses; //- negative change in balance
     private int numberOfExpenses;
 
-    private Account(String giroNumber, String currency, double balance, String valid_from, String valid_to) {
+    private Account(String giroNumber, String currency, double balance, double balanceInEur, String valid_from, String valid_to) {
         this.giroNumber = giroNumber;
         this.currency = currency;
         this.balance = balance;
+        this.balanceInEur = balanceInEur;
         this.valid_from = CustomDateFormatter.getTimeStampFromDateInSeconds(valid_from);
         this.valid_to = CustomDateFormatter.getTimeStampFromDateInSeconds(valid_to);
 
@@ -42,10 +46,11 @@ public class Account {
     static Account createNewAccountFromJson(JsonObject json) {
         String giroNumber = json.get("GIRONUMBER").getAsString();
         double amount = Double.parseDouble(json.get("AMOUNT").getAsString());
+        double amountInEur = Double.parseDouble(json.get("AMOUNT_EUR").getAsString());
         String currency = json.get("CURRENCY").getAsString();
         String valid_from_date = json.get("VALID_FROM").getAsString();
         String valid_to_date = json.get("VALID_TO").getAsString();
-        return new Account(giroNumber,currency,amount, valid_from_date, valid_to_date);
+        return new Account(giroNumber,currency,amount, amountInEur, valid_from_date, valid_to_date);
     }
 
     public boolean searchPatternInExpenses(Account newAccount) {
@@ -58,10 +63,23 @@ public class Account {
         return anomaly;
     }
 
+    public static boolean zscoreOutlier(Account account, Double lastWindowMean, Double lastWindowStdDev, Integer thresh) {
+        boolean anomaly = false;
+        double zscore = (account.balanceInEur - lastWindowMean)/lastWindowStdDev;
+        //System.out.println(zscore);
+        if (Math.abs(zscore) > thresh) { // Predefined threshold
+            anomaly = true;
+        }
+        return anomaly;
+    }
+
     public static boolean searchAnomalyInBalance(Account newAccount, Account oldAccount) {
-        double previousAmount = oldAccount.balance;
-        double difference = newAccount.balance - previousAmount;
-        double anomalyLimit = Account.getAnomalyLimit(newAccount.currency);
+//        double previousAmount = oldAccount.balance;
+        double previousAmount = oldAccount.balanceInEur;
+//        double difference = newAccount.balance - previousAmount;
+        double difference = newAccount.balanceInEur - previousAmount;
+//        double anomalyLimit = Account.getAnomalyLimit(newAccount.currency);
+        double anomalyLimit = Account.getAnomalyLimit("EUR");
         boolean anomalyFound = (-1 * difference) > anomalyLimit;
         return anomalyFound;
     }
